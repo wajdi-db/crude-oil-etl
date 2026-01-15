@@ -1,0 +1,1263 @@
+{
+  "datasets": [
+    {
+      "name": "1065cfec",
+      "displayName": "Refineries Colored by Health Score",
+      "queryLines": [
+        "SELECT \n",
+        "    r.refinery_id,\n",
+        "    r.refinery_name,\n",
+        "    r.latitude,\n",
+        "    r.longitude,\n",
+        "    r.location_city,\n",
+        "    r.location_state,\n",
+        "    r.location_country,\n",
+        "    COALESCE(h.health_score, 100) AS health_score,\n",
+        "    CASE \n",
+        "        WHEN COALESCE(h.health_score, 100) >= 80 THEN 'HEALTHY'\n",
+        "        WHEN COALESCE(h.health_score, 100) >= 60 THEN 'DEGRADED'\n",
+        "        WHEN COALESCE(h.health_score, 100) >= 40 THEN 'AT_RISK'\n",
+        "        ELSE 'CRITICAL'\n",
+        "    END AS health_status,\n",
+        "    CASE \n",
+        "        WHEN COALESCE(h.health_score, 100) >= 80 THEN '#22C55E'  -- green\n",
+        "        WHEN COALESCE(h.health_score, 100) >= 60 THEN '#EAB308'  -- yellow\n",
+        "        WHEN COALESCE(h.health_score, 100) >= 40 THEN '#F97316'  -- orange\n",
+        "        ELSE '#EF4444'  -- red\n",
+        "    END AS marker_color,\n",
+        "    h.critical_count,\n",
+        "    h.warning_count,\n",
+        "    h.total_readings\n",
+        "FROM dim_refineries r\n",
+        "LEFT JOIN (\n",
+        "    -- Calculate health score per refinery from recent readings\n",
+        "    SELECT \n",
+        "        refinery_id,\n",
+        "        COUNT(*) AS total_readings,\n",
+        "        SUM(CASE WHEN alert_status = 'CRITICAL' THEN 1 ELSE 0 END) AS critical_count,\n",
+        "        SUM(CASE WHEN alert_status = 'WARNING' THEN 1 ELSE 0 END) AS warning_count,\n",
+        "        GREATEST(0, 100 - \n",
+        "            (SUM(CASE WHEN alert_status = 'CRITICAL' THEN 1 ELSE 0 END) * 5.0 / COUNT(*) * 100) -\n",
+        "            (SUM(CASE WHEN alert_status = 'WARNING' THEN 1 ELSE 0 END) * 1.0 / COUNT(*) * 100)\n",
+        "        ) AS health_score\n",
+        "    FROM silver_sensor_readings\n",
+        "    WHERE reading_timestamp >= CURRENT_TIMESTAMP() - INTERVAL 2 YEAR\n",
+        "    GROUP BY refinery_id\n",
+        ") h ON r.refinery_id = h.refinery_id\n",
+        "ORDER BY health_score ASC;\n"
+      ],
+      "catalog": "wajdi_bounouara",
+      "schema": "parex_resources"
+    },
+    {
+      "name": "39136032",
+      "displayName": "gold_equipment_health",
+      "queryLines": [
+        "SELECT * FROM wajdi_bounouara.parex_resources.gold_equipment_health"
+      ]
+    },
+    {
+      "name": "e6f82977",
+      "displayName": "gold_inventory_status",
+      "queryLines": [
+        "SELECT * FROM wajdi_bounouara.parex_resources.gold_inventory_status"
+      ]
+    },
+    {
+      "name": "d8fdcaa5",
+      "displayName": "gold_anomaly_alerts",
+      "queryLines": [
+        "SELECT * FROM wajdi_bounouara.parex_resources.gold_anomaly_alerts"
+      ]
+    },
+    {
+      "name": "7042fc30",
+      "displayName": "gold_product_yield",
+      "queryLines": [
+        "SELECT * FROM wajdi_bounouara.parex_resources.gold_product_yield"
+      ]
+    },
+    {
+      "name": "88da53b7",
+      "displayName": "dim_crude_types",
+      "queryLines": [
+        "SELECT * FROM wajdi_bounouara.parex_resources.dim_crude_types"
+      ]
+    },
+    {
+      "name": "312ff843",
+      "displayName": "dim_processing_units",
+      "queryLines": [
+        "SELECT * FROM wajdi_bounouara.parex_resources.dim_processing_units"
+      ]
+    },
+    {
+      "name": "40bf7c46",
+      "displayName": "dim_products",
+      "queryLines": [
+        "SELECT * FROM wajdi_bounouara.parex_resources.dim_products"
+      ]
+    },
+    {
+      "name": "395b6511",
+      "displayName": "dim_refineries",
+      "queryLines": [
+        "SELECT * FROM wajdi_bounouara.parex_resources.dim_refineries"
+      ]
+    },
+    {
+      "name": "b6d34f69",
+      "displayName": "dim_sensors",
+      "queryLines": [
+        "SELECT * FROM wajdi_bounouara.parex_resources.dim_sensors"
+      ]
+    },
+    {
+      "name": "45e8d439",
+      "displayName": "dim_storage_tanks",
+      "queryLines": [
+        "SELECT * FROM wajdi_bounouara.parex_resources.dim_storage_tanks"
+      ]
+    },
+    {
+      "name": "9e68a054",
+      "displayName": "List of Critical/Warning Alerts",
+      "queryLines": [
+        "SELECT \n",
+        "    s.reading_timestamp AS alert_time,\n",
+        "    s.refinery_id,\n",
+        "    r.refinery_name,\n",
+        "    s.unit_id,\n",
+        "    s.sensor_id,\n",
+        "    s.sensor_type,\n",
+        "    s.alert_status,\n",
+        "    s.reading_value,\n",
+        "    s.measurement_unit,\n",
+        "    CASE s.sensor_type\n",
+        "        WHEN 'Temperature' THEN \n",
+        "            CASE WHEN s.reading_value > 700 THEN 'HIGH' ELSE 'LOW' END\n",
+        "        WHEN 'Pressure' THEN \n",
+        "            CASE WHEN s.reading_value > 300 THEN 'HIGH' ELSE 'LOW' END\n",
+        "        WHEN 'Flow Rate' THEN \n",
+        "            CASE WHEN s.reading_value > 12000 THEN 'HIGH' ELSE 'LOW' END\n",
+        "        WHEN 'Level' THEN \n",
+        "            CASE WHEN s.reading_value > 90 THEN 'HIGH' ELSE 'LOW' END\n",
+        "        WHEN 'Vibration' THEN 'HIGH'\n",
+        "        ELSE 'UNKNOWN'\n",
+        "    END AS alert_direction,\n",
+        "    CASE s.alert_status\n",
+        "        WHEN 'CRITICAL' THEN '🔴'\n",
+        "        WHEN 'WARNING' THEN '🟡'\n",
+        "        ELSE '🟢'\n",
+        "    END AS status_icon\n",
+        "FROM silver_sensor_readings s\n",
+        "LEFT JOIN dim_refineries r ON s.refinery_id = r.refinery_id\n",
+        "WHERE s.alert_status IN ('CRITICAL', 'WARNING')\n",
+        "  AND s.reading_timestamp >= CURRENT_TIMESTAMP() - INTERVAL 2 YEAR\n",
+        "ORDER BY s.reading_timestamp DESC\n",
+        "LIMIT 100;\n"
+      ],
+      "catalog": "wajdi_bounouara",
+      "schema": "parex_resources"
+    },
+    {
+      "name": "fe31d542",
+      "displayName": "sensor heatmap",
+      "queryLines": [
+        "SELECT \n",
+        "    unit_id,\n",
+        "    sensor_type,\n",
+        "    COUNT(*) AS reading_count,\n",
+        "    SUM(CASE WHEN alert_status != \"NORMAL\" THEN 1 ELSE 0 END) AS anomaly_count,\n",
+        "    ROUND(100.0 * SUM(CASE WHEN alert_status != \"NORMAL\" THEN 1 ELSE 0 END) / COUNT(*), 2) AS anomaly_rate_pct,\n",
+        "    ROUND(100.0 * SUM(CASE WHEN alert_status = 'CRITICAL' THEN 1 ELSE 0 END) / COUNT(*), 2) AS critical_rate_pct,\n",
+        "    ROUND(100.0 * SUM(CASE WHEN alert_status = 'WARNING' THEN 1 ELSE 0 END) / COUNT(*), 2) AS warning_rate_pct\n",
+        "FROM silver_sensor_readings\n",
+        "WHERE reading_timestamp >= CURRENT_TIMESTAMP() - INTERVAL 24 MONTHS\n",
+        "GROUP BY unit_id, sensor_type\n",
+        "ORDER BY anomaly_rate_pct DESC;\n"
+      ],
+      "catalog": "wajdi_bounouara",
+      "schema": "parex_resources"
+    },
+    {
+      "name": "ff5c89e7",
+      "displayName": "Key Sensor Readings Over Last 24 Hours",
+      "queryLines": [
+        "SELECT \n",
+        "    DATE_TRUNC('minute', reading_timestamp) AS time_bucket,\n",
+        "    sensor_type,\n",
+        "    ROUND(AVG(reading_value), 2) AS avg_value,\n",
+        "    ROUND(MIN(reading_value), 2) AS min_value,\n",
+        "    ROUND(MAX(reading_value), 2) AS max_value,\n",
+        "    ROUND(STDDEV(reading_value), 2) AS stddev_value,\n",
+        "    COUNT(*) AS reading_count,\n",
+        "    SUM(CASE WHEN alert_status != \"NORMAL\" THEN 1 ELSE 0 END) AS anomaly_count\n",
+        "FROM silver_sensor_readings\n",
+        "WHERE reading_timestamp >= CURRENT_TIMESTAMP() - INTERVAL 24 HOURS\n",
+        "GROUP BY DATE_TRUNC('minute', reading_timestamp), sensor_type\n",
+        "ORDER BY time_bucket, sensor_type;\n"
+      ],
+      "catalog": "wajdi_bounouara",
+      "schema": "parex_resources"
+    },
+    {
+      "name": "c6f68a2a",
+      "displayName": "KPI Cards",
+      "queryLines": [
+        "SELECT \n",
+        "    -- Alert counts (last hour)\n",
+        "    SUM(CASE WHEN alert_status = 'CRITICAL' THEN 1 ELSE 0 END) AS critical_alerts,\n",
+        "    SUM(CASE WHEN alert_status = 'WARNING' THEN 1 ELSE 0 END) AS warning_alerts,\n",
+        "    SUM(CASE WHEN alert_status = 'CRITICAL' OR alert_status = 'WARNING' THEN 1 ELSE 0 END) AS total_alerts,\n",
+        "    \n",
+        "    -- Counts\n",
+        "    COUNT(DISTINCT refinery_id) AS active_refineries,\n",
+        "    COUNT(DISTINCT unit_id) AS active_units,\n",
+        "    COUNT(DISTINCT sensor_id) AS active_sensors,\n",
+        "    COUNT(*) AS total_readings,\n",
+        "    \n",
+        "    -- Rates\n",
+        "    ROUND(100.0 * SUM(CASE WHEN alert_status != \"NORMAL\" THEN 1 ELSE 0 END) / COUNT(*), 2) AS anomaly_rate_pct,\n",
+        "    ROUND(100.0 * SUM(CASE WHEN reading_quality = 'GOOD' THEN 1 ELSE 0 END) / COUNT(*), 2) AS data_quality_pct,\n",
+        "    \n",
+        "    -- Time window\n",
+        "    MIN(reading_timestamp) AS window_start,\n",
+        "    MAX(reading_timestamp) AS window_end\n",
+        "FROM silver_sensor_readings\n",
+        "WHERE reading_timestamp >= CURRENT_TIMESTAMP() - INTERVAL 1 month;\n"
+      ],
+      "catalog": "wajdi_bounouara",
+      "schema": "parex_resources"
+    },
+    {
+      "name": "e4acd2e2",
+      "displayName": "YIELD BY CRUDE TYPE",
+      "queryLines": [
+        "SELECT \n",
+        "    p.product_category as crude_type,\n",
+        "    SUM(p.input_volume_barrels) AS total_input_barrels,\n",
+        "    SUM(p.output_volume_barrels) AS total_output_barrels,\n",
+        "    ROUND(100.0 * SUM(p.output_volume_barrels) / NULLIF(SUM(p.input_volume_barrels), 0), 2) AS yield_pct,\n",
+        "    COUNT(DISTINCT p.refinery_id) AS refinery_count,\n",
+        "    COUNT(*) AS batch_count\n",
+        "FROM silver_production p\n",
+        "WHERE p.production_hour >= CURRENT_DATE() - INTERVAL 30 MONTHS\n",
+        "GROUP BY p.product_category\n",
+        "ORDER BY yield_pct DESC;\n"
+      ],
+      "catalog": "wajdi_bounouara",
+      "schema": "parex_resources"
+    },
+    {
+      "name": "8bc8de7e",
+      "displayName": "capacity utilization",
+      "queryLines": [
+        "SELECT \n",
+        "    p.production_hour,\n",
+        "    p.refinery_id,\n",
+        "    r.refinery_name,\n",
+        "    r.capacity_bpd,\n",
+        "    SUM(p.input_volume_barrels) AS actual_barrels,\n",
+        "    ROUND(100.0 * SUM(p.input_volume_barrels) / NULLIF(r.capacity_bpd, 0), 2) AS utilization_pct\n",
+        "FROM silver_production p\n",
+        "JOIN dim_refineries r ON p.refinery_id = r.refinery_id\n",
+        "WHERE p.production_hour >= CURRENT_DATE() - INTERVAL 90 months\n",
+        "GROUP BY p.production_hour, p.refinery_id, r.refinery_name, r.capacity_bpd\n",
+        "ORDER BY p.production_hour, p.refinery_id;\n"
+      ],
+      "catalog": "wajdi_bounouara",
+      "schema": "parex_resources"
+    },
+    {
+      "name": "bf908ddd",
+      "displayName": "product mix",
+      "queryLines": [
+        "SELECT \n",
+        "    product_category,\n",
+        "    SUM(output_volume_barrels) AS total_barrels,\n",
+        "    ROUND(100.0 * SUM(output_volume_barrels) / SUM(SUM(output_volume_barrels)) OVER(), 2) AS percentage\n",
+        "FROM silver_production\n",
+        "WHERE production_hour >= CURRENT_DATE() - INTERVAL 30 months\n",
+        "GROUP BY product_category\n",
+        "ORDER BY total_barrels DESC;\n",
+        "\n"
+      ],
+      "catalog": "wajdi_bounouara",
+      "schema": "parex_resources"
+    },
+    {
+      "name": "9a3106b7",
+      "displayName": "energy efficiency",
+      "queryLines": [
+        "SELECT \n",
+        "    production_hour,\n",
+        "    SUM(energy_consumed_mmbtu) AS total_energy_mwh,\n",
+        "    SUM(output_volume_barrels) AS total_output_barrels,\n",
+        "    ROUND(SUM(energy_consumed_mmbtu) / NULLIF(SUM(output_volume_barrels), 0) * 1000, 4) AS kwh_per_barrel,\n",
+        "    ROUND(AVG(energy_consumed_mmbtu / NULLIF(output_volume_barrels, 0)) * 1000, 4) AS avg_kwh_per_barrel\n",
+        "FROM silver_production\n",
+        "WHERE production_hour >= CURRENT_DATE() - INTERVAL 14 months\n",
+        "GROUP BY production_hour\n",
+        "ORDER BY production_hour;\n"
+      ],
+      "catalog": "wajdi_bounouara",
+      "schema": "parex_resources"
+    },
+    {
+      "name": "4329c8d2",
+      "displayName": "Health Leaderboard",
+      "queryLines": [
+        "SELECT \n",
+        "    s.unit_id,\n",
+        "    s.refinery_id,\n",
+        "    r.refinery_name,\n",
+        "    COUNT(*) AS total_readings,\n",
+        "    SUM(CASE WHEN s.alert_status = 'CRITICAL' THEN 1 ELSE 0 END) AS critical_count,\n",
+        "    SUM(CASE WHEN s.alert_status = 'WARNING' THEN 1 ELSE 0 END) AS warning_count,\n",
+        "    SUM(CASE WHEN s.is_anomaly THEN 1 ELSE 0 END) AS anomaly_count,\n",
+        "    ROUND(100.0 * SUM(CASE WHEN s.is_anomaly THEN 1 ELSE 0 END) / COUNT(*), 2) AS anomaly_rate_pct,\n",
+        "    ROUND(GREATEST(0, 100 - \n",
+        "        (SUM(CASE WHEN s.alert_status = 'CRITICAL' THEN 1 ELSE 0 END) * 500.0 / COUNT(*)) -\n",
+        "        (SUM(CASE WHEN s.alert_status = 'WARNING' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) -\n",
+        "        (SUM(CASE WHEN s.is_anomaly THEN 1 ELSE 0 END) * 200.0 / COUNT(*))\n",
+        "    ), 1) AS health_score,\n",
+        "    CASE \n",
+        "        WHEN GREATEST(0, 100 - \n",
+        "            (SUM(CASE WHEN s.alert_status = 'CRITICAL' THEN 1 ELSE 0 END) * 500.0 / COUNT(*)) -\n",
+        "            (SUM(CASE WHEN s.alert_status = 'WARNING' THEN 1 ELSE 0 END) * 100.0 / COUNT(*))\n",
+        "        ) >= 80 THEN 'HEALTHY'\n",
+        "        WHEN GREATEST(0, 100 - \n",
+        "            (SUM(CASE WHEN s.alert_status = 'CRITICAL' THEN 1 ELSE 0 END) * 500.0 / COUNT(*)) -\n",
+        "            (SUM(CASE WHEN s.alert_status = 'WARNING' THEN 1 ELSE 0 END) * 100.0 / COUNT(*))\n",
+        "        ) >= 60 THEN 'DEGRADED'\n",
+        "        WHEN GREATEST(0, 100 - \n",
+        "            (SUM(CASE WHEN s.alert_status = 'CRITICAL' THEN 1 ELSE 0 END) * 500.0 / COUNT(*)) -\n",
+        "            (SUM(CASE WHEN s.alert_status = 'WARNING' THEN 1 ELSE 0 END) * 100.0 / COUNT(*))\n",
+        "        ) >= 40 THEN 'AT_RISK'\n",
+        "        ELSE 'CRITICAL'\n",
+        "    END AS health_status,\n",
+        "    m.last_maintenance_date,\n",
+        "    DATEDIFF(CURRENT_DATE(), m.last_maintenance_date) AS days_since_maintenance\n",
+        "FROM silver_sensor_readings s\n",
+        "LEFT JOIN dim_refineries r ON s.refinery_id = r.refinery_id\n",
+        "LEFT JOIN (\n",
+        "    SELECT unit_id, MAX(maintenance_date) AS last_maintenance_date\n",
+        "    FROM silver.maintenance_history\n",
+        "    GROUP BY unit_id\n",
+        ") m ON s.unit_id = m.unit_id\n",
+        "WHERE s.reading_timestamp >= CURRENT_TIMESTAMP() - INTERVAL 24 HOURS\n",
+        "GROUP BY s.unit_id, s.refinery_id, r.refinery_name, m.last_maintenance_date\n",
+        "ORDER BY health_score ASC\n",
+        "LIMIT 50;\n"
+      ],
+      "catalog": "wajdi_bounouara",
+      "schema": "parex_resources"
+    }
+  ],
+  "pages": [
+    {
+      "name": "fbf71a55",
+      "displayName": "Real-Time Operations Center",
+      "layout": [
+        {
+          "widget": {
+            "name": "map-view-refineries-health-score",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "1065cfec",
+                  "fields": [
+                    {
+                      "name": "health_score",
+                      "expression": "`health_score`"
+                    },
+                    {
+                      "name": "latitude",
+                      "expression": "`latitude`"
+                    },
+                    {
+                      "name": "longitude",
+                      "expression": "`longitude`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "symbol-map",
+              "encodings": {
+                "coordinates": {
+                  "latitude": {
+                    "fieldName": "latitude"
+                  },
+                  "longitude": {
+                    "fieldName": "longitude"
+                  }
+                },
+                "color": {
+                  "fieldName": "health_score",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "title": "Map view of Refineries colored by Health Score",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "alert-feed-live-scrolling-list-critical-warning-alerts",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "9e68a054",
+                  "fields": [
+                    {
+                      "name": "alert_time",
+                      "expression": "`alert_time`"
+                    },
+                    {
+                      "name": "refinery_name",
+                      "expression": "`refinery_name`"
+                    },
+                    {
+                      "name": "sensor_id",
+                      "expression": "`sensor_id`"
+                    },
+                    {
+                      "name": "sensor_type",
+                      "expression": "`sensor_type`"
+                    },
+                    {
+                      "name": "alert_status",
+                      "expression": "`alert_status`"
+                    },
+                    {
+                      "name": "reading_value",
+                      "expression": "`reading_value`"
+                    },
+                    {
+                      "name": "alert_direction",
+                      "expression": "`alert_direction`"
+                    },
+                    {
+                      "name": "status_icon",
+                      "expression": "`status_icon`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "alert_time",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100000,
+                    "title": "alert_time",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "refinery_name",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100002,
+                    "title": "refinery_name",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "sensor_id",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100004,
+                    "title": "sensor_id",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "sensor_type",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100005,
+                    "title": "sensor_type",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "alert_status",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100006,
+                    "title": "alert_status",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "reading_value",
+                    "numberFormat": "0.00",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 100007,
+                    "title": "reading_value",
+                    "allowSearch": false,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "alert_direction",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100009,
+                    "title": "alert_direction",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "status_icon",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100010,
+                    "title": "status_icon",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  }
+                ]
+              },
+              "invisibleColumns": [
+                {
+                  "booleanValues": [
+                    "false",
+                    "true"
+                  ],
+                  "imageUrlTemplate": "{{ @ }}",
+                  "imageTitleTemplate": "{{ @ }}",
+                  "imageWidth": "",
+                  "imageHeight": "",
+                  "linkUrlTemplate": "{{ @ }}",
+                  "linkTextTemplate": "{{ @ }}",
+                  "linkTitleTemplate": "{{ @ }}",
+                  "linkOpenInNewTab": true,
+                  "name": "refinery_id",
+                  "type": "string",
+                  "displayAs": "string",
+                  "order": 100001,
+                  "title": "refinery_id",
+                  "allowSearch": false,
+                  "alignContent": "left",
+                  "allowHTML": false,
+                  "highlightLinks": false,
+                  "useMonospaceFont": false,
+                  "preserveWhitespace": false
+                },
+                {
+                  "booleanValues": [
+                    "false",
+                    "true"
+                  ],
+                  "imageUrlTemplate": "{{ @ }}",
+                  "imageTitleTemplate": "{{ @ }}",
+                  "imageWidth": "",
+                  "imageHeight": "",
+                  "linkUrlTemplate": "{{ @ }}",
+                  "linkTextTemplate": "{{ @ }}",
+                  "linkTitleTemplate": "{{ @ }}",
+                  "linkOpenInNewTab": true,
+                  "name": "unit_id",
+                  "type": "string",
+                  "displayAs": "string",
+                  "order": 100003,
+                  "title": "unit_id",
+                  "allowSearch": false,
+                  "alignContent": "left",
+                  "allowHTML": false,
+                  "highlightLinks": false,
+                  "useMonospaceFont": false,
+                  "preserveWhitespace": false
+                },
+                {
+                  "booleanValues": [
+                    "false",
+                    "true"
+                  ],
+                  "imageUrlTemplate": "{{ @ }}",
+                  "imageTitleTemplate": "{{ @ }}",
+                  "imageWidth": "",
+                  "imageHeight": "",
+                  "linkUrlTemplate": "{{ @ }}",
+                  "linkTextTemplate": "{{ @ }}",
+                  "linkTitleTemplate": "{{ @ }}",
+                  "linkOpenInNewTab": true,
+                  "name": "measurement_unit",
+                  "type": "string",
+                  "displayAs": "string",
+                  "order": 100008,
+                  "title": "measurement_unit",
+                  "allowSearch": false,
+                  "alignContent": "left",
+                  "allowHTML": false,
+                  "highlightLinks": false,
+                  "useMonospaceFont": false,
+                  "preserveWhitespace": false
+                }
+              ],
+              "allowHTMLByDefault": false,
+              "itemsPerPage": 25,
+              "paginationSize": "default",
+              "condensed": true,
+              "withRowNumber": false,
+              "frame": {
+                "showTitle": true,
+                "title": "ALERT FEED: Live Scrolling List of Critical/Warning Alerts"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 5,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "trend-charts-key-sensor-readings-last-24-hours",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ff5c89e7",
+                  "fields": [
+                    {
+                      "name": "secondly(time_bucket)",
+                      "expression": "DATE_TRUNC(\"SECOND\", `time_bucket`)"
+                    },
+                    {
+                      "name": "sum(avg_value)",
+                      "expression": "SUM(`avg_value`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "secondly(time_bucket)",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(avg_value)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "TREND CHARTS: Key Sensor Readings Over Last 24 Hours"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "heatmap-matrix-color-intensity-anomaly-rate",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "fe31d542",
+                  "fields": [
+                    {
+                      "name": "anomaly_rate_pct",
+                      "expression": "`anomaly_rate_pct`"
+                    },
+                    {
+                      "name": "unit_id",
+                      "expression": "`unit_id`"
+                    },
+                    {
+                      "name": "sensor_type",
+                      "expression": "`sensor_type`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "scatter",
+              "encodings": {
+                "x": {
+                  "fieldName": "unit_id",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sensor_type",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "anomaly_rate_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "title": "Heatmap matrix with color intensity by anomaly rate",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 12,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "total-alerts",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "c6f68a2a",
+                  "fields": [
+                    {
+                      "name": "sum(critical_alerts)",
+                      "expression": "SUM(`critical_alerts`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(critical_alerts)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Total Alerts"
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 10,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "active-units",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "c6f68a2a",
+                  "fields": [
+                    {
+                      "name": "sum(active_units)",
+                      "expression": "SUM(`active_units`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(active_units)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Active Units"
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 8,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "anomaly-rate1",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "c6f68a2a",
+                  "fields": [
+                    {
+                      "name": "sum(anomaly_rate_pct)",
+                      "expression": "SUM(`anomaly_rate_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(anomaly_rate_pct)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Anomaly Rate"
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 6,
+            "width": 1,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "name": "17b31e0a",
+      "displayName": "Production Performance",
+      "layout": [
+        {
+          "widget": {
+            "name": "yield-by-crude-type-bar-chart-comparing-yields",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "e4acd2e2",
+                  "fields": [
+                    {
+                      "name": "crude_type",
+                      "expression": "`crude_type`"
+                    },
+                    {
+                      "name": "sum(yield_pct)",
+                      "expression": "SUM(`yield_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "crude_type",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(yield_pct)",
+                  "scale": {
+                    "type": "quantitative",
+                    "domain": {
+                      "min": 70,
+                      "max": 100
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "YIELD BY CRUDE TYPE: Bar Chart Comparing Yields"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "capacity-utilization-line",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "8bc8de7e",
+                  "fields": [
+                    {
+                      "name": "refinery_name",
+                      "expression": "`refinery_name`"
+                    },
+                    {
+                      "name": "production_hour",
+                      "expression": "`production_hour`"
+                    },
+                    {
+                      "name": "utilization_pct",
+                      "expression": "`utilization_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "production_hour",
+                  "axis": {
+                    "labelAngle": 0,
+                    "hideLabels": false,
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "utilization_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "refinery_name",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": false
+                }
+              },
+              "frame": {
+                "title": "Utilization Percentage per Production Hour",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 6,
+            "height": 11
+          }
+        },
+        {
+          "widget": {
+            "name": "product-output-breakdown",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "bf908ddd",
+                  "fields": [
+                    {
+                      "name": "sum(total_barrels)",
+                      "expression": "SUM(`total_barrels`)"
+                    },
+                    {
+                      "name": "product_category",
+                      "expression": "`product_category`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "sum(total_barrels)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "hideTitle": true
+                  }
+                },
+                "color": {
+                  "fieldName": "product_category",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "title": "PRODUCT MIX : Product Output Breakdown",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 2,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "energy-efficiency-line",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "9a3106b7",
+                  "fields": [
+                    {
+                      "name": "production_hour",
+                      "expression": "`production_hour`"
+                    },
+                    {
+                      "name": "kwh_per_barrel",
+                      "expression": "`kwh_per_barrel`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "production_hour",
+                  "axis": {
+                    "hideTitle": true,
+                    "labelAngle": 0
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "kwh_per_barrel",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Energy Efficiency (Line)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 17,
+            "width": 6,
+            "height": 6
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
